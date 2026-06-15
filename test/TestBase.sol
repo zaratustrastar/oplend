@@ -8,7 +8,6 @@ interface Vm {
     function expectRevert(bytes4 revertData) external;
     function deal(address account, uint256 newBalance) external;
     function warp(uint256 newTimestamp) external;
-    function targetContract(address newTargetedContract) external;
 }
 
 abstract contract TestBase {
@@ -24,10 +23,6 @@ abstract contract TestBase {
             return min + (value % (max - min + 1));
         }
         return value;
-    }
-
-    function targetContract(address target) internal {
-        vm.targetContract(target);
     }
 
     function assertTrue(bool condition) internal pure {

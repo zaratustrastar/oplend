@@ -99,7 +99,11 @@ contract PMFIOpLendingV21InvariantTest is TestBase {
         vm.stopPrank();
 
         handler = new ExerciseHandler(vault, usdc, borrower);
-        targetContract(address(handler));
+    }
+
+    function targetContracts() public view returns (address[] memory targets) {
+        targets = new address[](1);
+        targets[0] = address(handler);
     }
 
     function invariant_NAccountingAlwaysBalances() public view {

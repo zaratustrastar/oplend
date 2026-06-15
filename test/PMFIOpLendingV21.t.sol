@@ -123,21 +123,25 @@ contract PMFIOpLendingV21Test is TestBase {
     function test_NCannotTransferBeforeFundingCloses() public {
         (PMFIPositionVaultV21 vault,) = _create(100 * ONE, 100e6, 120e6);
 
-        vm.prank(borrower);
+        PMFILegTokenV21 nToken = vault.N();
+
         vm.expectRevert(PMFILegTokenV21.TransfersDisabled.selector);
-        vault.N().transfer(lender1, ONE);
+        vm.prank(borrower);
+        nToken.transfer(lender1, ONE);
     }
 
     function test_FullFillClosesFundingAndAllowsNTransfers() public {
         uint256 amount = 100 * ONE;
         (PMFIPositionVaultV21 vault, uint256 saleId) = _create(amount, 100e6, 120e6);
 
+        uint256 borrowerUsdcBefore = usdc.balanceOf(borrower);
+
         _buy(lender1, saleId, amount);
 
         assertTrue(vault.fundingClosed());
         assertTrue(vault.N().transfersEnabled());
         assertEq(vault.P().balanceOf(lender1), amount);
-        assertEq(usdc.balanceOf(borrower), 100e6);
+        assertEq(usdc.balanceOf(borrower), borrowerUsdcBefore + 100e6);
     }
 
     function test_PartialFillCancelBurnsUnsoldLegsAndRefundsCollateral() public {
