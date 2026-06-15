@@ -9,6 +9,7 @@ interface Vm {
     function expectRevert(bytes calldata revertData) external;
     function deal(address account, uint256 newBalance) external;
     function warp(uint256 newTimestamp) external;
+    function skip(bool skipTest) external;
 }
 
 abstract contract TestBase {
