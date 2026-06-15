@@ -1,0 +1,13 @@
+.env
+.env.*
+out/
+cache/
+broadcast/
+logs/
+reports/
+coverage/
+lcov.info
+lib/
+*.key
+*.pem
+archive/

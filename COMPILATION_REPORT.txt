@@ -1,0 +1,9 @@
+Solidity: 0.8.24
+Optimizer: enabled, 200 runs
+viaIR: false
+Result: success
+
+PMFILegTokenV21: creation 3434 bytes; runtime 2473 bytes
+PMFIPositionFactoryV21: creation 29777 bytes; runtime 21882 bytes
+PMFIPositionVaultV21: creation 15367 bytes; runtime 9368 bytes
+PMFIPrimaryMarketplaceV21: creation 7040 bytes; runtime 6643 bytes
