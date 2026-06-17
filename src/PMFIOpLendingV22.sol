@@ -130,6 +130,9 @@ contract PMFIPositionVaultV22 is ReentrancyGuard {
     uint256 public exercisedN;
     uint256 public usdcPaid;
 
+    // Collateral reserved for the borrower after unsold P and matching N are burned.
+    uint256 public collateralRefundClaim;
+
     uint256 public collateralPoolAtSettle;
     uint256 public usdcPoolAtSettle;
     uint256 public pSupplyAtSettle;
@@ -137,7 +140,8 @@ contract PMFIPositionVaultV22 is ReentrancyGuard {
     event PositionInitialized(
         address indexed borrower, uint256 collateralAmount, uint256 pMintedToMarketplace, uint256 nMintedToBorrower
     );
-    event FundingClosed(uint256 unsoldP, uint256 collateralRefunded, uint256 timestamp);
+    event FundingClosed(uint256 unsoldP, uint256 collateralRefundClaimRecorded, uint256 timestamp);
+    event CollateralRefundClaimed(address indexed borrower, address indexed recipient, uint256 amount);
     event RedeemPair(address indexed user, uint256 amount, uint256 collateralOut);
     event Exercise(address indexed user, uint256 nAmount, uint256 usdcPaid, uint256 collateralOut);
     event Settled(bool early, uint256 collateralPool, uint256 usdcPool, uint256 pSupply);
@@ -145,6 +149,7 @@ contract PMFIPositionVaultV22 is ReentrancyGuard {
 
     error OnlyFactory();
     error OnlyMarketplace();
+    error OnlyBorrower();
     error ZeroAddress();
     error ZeroAmount();
     error SameTokens();
@@ -163,6 +168,7 @@ contract PMFIPositionVaultV22 is ReentrancyGuard {
     error InsufficientCollateral();
     error InsufficientUnsoldP();
     error InsufficientBorrowerN();
+    error NoCollateralRefund();
     error FeeOnTransferUnsupported();
     error AccountingInvariantBroken();
 
@@ -238,8 +244,8 @@ contract PMFIPositionVaultV22 is ReentrancyGuard {
         emit PositionInitialized(borrower, initialCollateralAmount, initialCollateralAmount, initialCollateralAmount);
     }
 
-    /// @notice Marketplace closes funding and atomically refunds the unfunded collateral portion.
-    /// @dev Unsold P is burned from marketplace escrow and matching locked N is burned from borrower.
+    /// @notice Marketplace closes funding and records unfunded collateral as a borrower claim.
+    /// @dev No outbound collateral transfer occurs, so token failures cannot block lifecycle progress.
     function closeFunding(uint256 unsoldP) external onlyMarketplace nonReentrant {
         if (!initialized) revert NotInitialized();
         if (settled) revert AlreadySettled();
@@ -248,14 +254,15 @@ contract PMFIPositionVaultV22 is ReentrancyGuard {
         if (unsoldP > N.balanceOf(borrower)) revert InsufficientBorrowerN();
 
         fundingClosed = true;
-        uint256 collateralRefunded;
+        uint256 refundClaimRecorded;
 
         if (unsoldP > 0) {
             pairedN += unsoldP;
             P.burn(marketplace, unsoldP);
             N.burn(borrower, unsoldP);
-            collateralRefunded = unsoldP;
-            IERC20(address(collateral)).safeTransfer(borrower, unsoldP);
+
+            collateralRefundClaim = unsoldP;
+            refundClaimRecorded = unsoldP;
         }
 
         N.enableTransfers();
@@ -265,7 +272,30 @@ contract PMFIPositionVaultV22 is ReentrancyGuard {
         }
 
         _assertAccountingInvariant();
-        emit FundingClosed(unsoldP, collateralRefunded, block.timestamp);
+        emit FundingClosed(unsoldP, refundClaimRecorded, block.timestamp);
+    }
+
+    /// @notice Transfers collateral reserved for the borrower when funding closed with unsold P.
+    /// @dev A failed transfer reverts the transaction and restores the claim for a later retry.
+    function claimCollateralRefund(address recipient) external nonReentrant {
+        if (msg.sender != borrower) revert OnlyBorrower();
+        if (recipient == address(0)) revert ZeroAddress();
+
+        uint256 amount = collateralRefundClaim;
+        if (amount == 0) revert NoCollateralRefund();
+
+        collateralRefundClaim = 0;
+
+        uint256 recipientBalanceBefore = collateral.balanceOf(recipient);
+        IERC20(address(collateral)).safeTransfer(recipient, amount);
+        uint256 recipientBalanceAfter = collateral.balanceOf(recipient);
+
+        if (recipientBalanceAfter < recipientBalanceBefore || recipientBalanceAfter - recipientBalanceBefore != amount)
+        {
+            revert FeeOnTransferUnsupported();
+        }
+
+        emit CollateralRefundClaimed(msg.sender, recipient, amount);
     }
 
     /// @notice Burns matching P and N and returns matching collateral after funding closes.
