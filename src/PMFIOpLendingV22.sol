@@ -916,7 +916,8 @@ contract PMFIPrimaryMarketplaceV22 is ReentrancyGuard {
         uint256 received = USDC.balanceOf(address(this)) - beforeBal;
         if (received != totalPaid) revert FeeOnTransferUnsupported();
 
-        IERC20(address(USDC)).safeTransfer(s.seller, sellerPrice);
+        _safeTransferUsdcExact(s.seller, sellerPrice);
+
         IERC20(address(s.pToken)).safeTransfer(msg.sender, pAmount);
 
         bool filled = s.amountRemaining == 0;
@@ -960,13 +961,37 @@ contract PMFIPrimaryMarketplaceV22 is ReentrancyGuard {
         IPMFIPositionVaultV22(s.vault).closeFunding(remaining);
     }
 
+    /// @dev Transfers exactly `amount` USDC and rejects
+    ///      recipient-tax, sender-surcharge and other
+    ///      balance-changing token behavior.
+    function _safeTransferUsdcExact(address recipient, uint256 amount) private {
+        uint256 senderBalanceBefore = USDC.balanceOf(address(this));
+
+        uint256 recipientBalanceBefore = USDC.balanceOf(recipient);
+
+        IERC20(address(USDC)).safeTransfer(recipient, amount);
+
+        uint256 senderBalanceAfter = USDC.balanceOf(address(this));
+
+        uint256 recipientBalanceAfter = USDC.balanceOf(recipient);
+
+        if (
+            senderBalanceAfter > senderBalanceBefore || senderBalanceBefore - senderBalanceAfter != amount
+                || recipientBalanceAfter < recipientBalanceBefore
+                || recipientBalanceAfter - recipientBalanceBefore != amount
+        ) {
+            revert FeeOnTransferUnsupported();
+        }
+    }
+
     function withdrawProtocolFees() external nonReentrant {
         if (msg.sender != feeRecipient) revert OnlyFeeRecipient();
         uint256 amount = accruedProtocolFees;
         if (amount == 0) revert NoFees();
 
         accruedProtocolFees = 0;
-        IERC20(address(USDC)).safeTransfer(feeRecipient, amount);
+
+        _safeTransferUsdcExact(feeRecipient, amount);
 
         emit ProtocolFeesWithdrawn(feeRecipient, amount);
     }
