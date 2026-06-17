@@ -825,13 +825,18 @@ contract PMFIPrimaryMarketplaceV22 is ReentrancyGuard {
         emit SaleRegistered(saleId, vault, seller, address(pToken), address(USDC), pAmount, totalUsdcPrice, expiry);
     }
 
-    /// @notice Quotes seller proceeds for a partial fill. Final fill includes all quote dust.
+    /// @notice Quotes incremental seller proceeds from cumulative sale entitlement.
+    /// @dev Fill fragmentation cannot change total seller proceeds.
     function quoteUsdc(uint256 saleId, uint256 pAmount) public view returns (uint256) {
         Sale storage s = sales[saleId];
         if (pAmount == 0) revert ZeroAmount();
         if (pAmount > s.amountRemaining) revert TooMuch();
-        if (pAmount == s.amountRemaining) return s.usdcRemaining;
-        return Math.mulDiv(s.usdcTotal, pAmount, s.amountInitial);
+
+        uint256 amountSoldAfter = s.amountInitial - s.amountRemaining + pAmount;
+
+        uint256 cumulativeSellerPrice = Math.mulDiv(s.usdcTotal, amountSoldAfter, s.amountInitial);
+
+        return cumulativeSellerPrice - s.usdcRaisedToSeller;
     }
 
     /// @notice Cumulative fee calculation makes the final fee independent of fill splitting.
