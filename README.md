@@ -1,14 +1,5 @@
 # PMFI OP-Lending V2.1 — security-hardened draft
 
-This package rewrites the uploaded `PMFIOpLendingV2.sol` after reviewing:
-
-- `https://ethskills.com/SKILL.md`
-- `https://ethskills.com/ship/SKILL.md`
-- `https://ethskills.com/security/SKILL.md`
-- `https://ethskills.com/testing/SKILL.md`
-
-It is an experimental, unaudited draft. Do not deploy it with public funds yet.
-
 ## Architecture
 
 One protocol deployment:
